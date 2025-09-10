@@ -351,6 +351,61 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
             const defines: string[] = [];
             let compilerPath = '';
 
+            // Get all Arduino library paths
+            const libPathsProc = spawn('arduino-cli', ['config', 'dump']);
+            let libPathsOutput = '';
+            libPathsProc.stdout.on('data', data => libPathsOutput += data.toString());
+            
+            await new Promise<void>((resolve) => {
+                libPathsProc.on('close', async () => {
+                    try {
+                        // Parse the YAML-like output to find library paths
+                        const lines = libPathsOutput.split('\n');
+                        for (const line of lines) {
+                            if (line.includes('user:') || line.includes('sketchbook:')) {
+                                const match = line.match(/:\s*"([^"]+)"/);
+                                if (match) {
+                                    const libPath = path.join(match[1], 'libraries');
+                                    try {
+                                        await fs.access(libPath);
+                                        // Add library path and all its subdirectories
+                                        const entries = await fs.readdir(libPath, { withFileTypes: true });
+                                        for (const entry of entries) {
+                                            if (entry.isDirectory()) {
+                                                const libraryPath = path.join(libPath, entry.name);
+                                                includePaths.push(
+                                                    libraryPath,
+                                                    path.join(libraryPath, 'src')
+                                                );
+                                            }
+                                        }
+                                    } catch (err) {
+                                        channel.appendLine(`Note: Library path ${libPath} not found`);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        channel.appendLine(`Warning: Error processing library paths: ${err}`);
+                    }
+                    resolve();
+                });
+            });
+
+            // Also add Arduino core library paths
+            const arduinoLibPath = path.join(path.dirname(compilerPath), '..', 'libraries');
+            try {
+                await fs.access(arduinoLibPath);
+                const entries = await fs.readdir(arduinoLibPath, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.isDirectory()) {
+                        includePaths.push(path.join(arduinoLibPath, entry.name));
+                    }
+                }
+            } catch (err) {
+                channel.appendLine(`Note: Arduino core library path not found: ${arduinoLibPath}`);
+            }
+
             const gppLines = stdout.split(/\r?\n/).filter(l => l.includes('avr-g++') || l.includes('arm-none-eabi-g++'));
             if (gppLines.length > 0) {
                 const lastLine = gppLines[gppLines.length - 1];

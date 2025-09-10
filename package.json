@@ -2,7 +2,7 @@
   "name": "vscode-arduino-intellisense",
   "displayName": "Arduino Community Edition Intellisense",
   "description": "Automatically regenerates IntelliSense when #include changes in .ino files",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "svnty",
   "repository": {
     "type": "git",

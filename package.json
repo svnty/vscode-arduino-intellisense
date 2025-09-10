@@ -2,8 +2,12 @@
   "name": "vscode-arduino-intellisense",
   "displayName": "Arduino Community Edition Intellisense",
   "description": "Automatically regenerates IntelliSense when #include changes in .ino files",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "publisher": "svnty",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/svnty/vscode-arduino-intellisense.git"
+  },
   "engines": {
     "vscode": "^1.103.0"
   },
@@ -11,17 +15,9 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:arduino"
+    "onLanguage:cpp"
   ],
   "main": "./out/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "vscode-arduino-intellisense.helloWorld",
-        "title": "Hello World"
-      }
-    ]
-  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",

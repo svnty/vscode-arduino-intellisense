@@ -266,22 +266,58 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
 
             // Copy only active local header files to the temp directory
             for (const headerFile of activeIncludes) {
-                const sourcePath = path.join(originalSketchDir, headerFile);
-                const targetPath = path.join(tempDir, headerFile);
+                // Find all possible locations for the header
+                channel.appendLine(`Searching for header: ${headerFile}`);
                 
                 try {
-                    // Check if the header file exists in the sketch directory
-                    await fs.access(sourcePath);
+                    // Use file_search to find the header file recursively
+                    const searchPattern = `**/${headerFile}`;
+                    const files = await vscode.workspace.findFiles(
+                        searchPattern,
+                        '**/node_modules/**' // Exclude node_modules
+                    );
                     
-                    // Create subdirectories if needed
-                    await fs.mkdir(path.dirname(targetPath), { recursive: true });
-                    
-                    // Copy the header file
-                    await fs.copyFile(sourcePath, targetPath);
-                    channel.appendLine(`Copied local header: ${headerFile}`);
+                    if (files.length > 0) {
+                        // Use the first matching file found
+                        const sourcePath = files[0].fsPath;
+                        
+                        // Preserve the include path structure
+                        const relativePath = headerFile.includes('/') ? headerFile : path.basename(headerFile);
+                        const targetPath = path.join(tempDir, relativePath);
+                        
+                        channel.appendLine(`Found header at: ${sourcePath}`);
+                        channel.appendLine(`Preserving path structure: ${relativePath}`);
+                        
+                        // Create subdirectories if needed
+                        await fs.mkdir(path.dirname(targetPath), { recursive: true });
+                        
+                        // Copy the header file
+                        await fs.copyFile(sourcePath, targetPath);
+                        channel.appendLine(`✅ Copied local header to: ${targetPath}`);
+                    } else {
+                        // Try direct path as fallback
+                        const directPath = path.join(originalSketchDir, headerFile);
+                        try {
+                            await fs.access(directPath);
+                            
+                            // Preserve the include path structure for direct path too
+                            const relativePath = headerFile.includes('/') ? headerFile : path.basename(headerFile);
+                            const targetPath = path.join(tempDir, relativePath);
+                            
+                            channel.appendLine(`Using direct path, preserving structure: ${relativePath}`);
+                            
+                            // Create subdirectories if needed
+                            await fs.mkdir(path.dirname(targetPath), { recursive: true });
+                            
+                            // Copy the header file
+                            await fs.copyFile(directPath, targetPath);
+                            channel.appendLine(`✅ Copied local header (direct path) to: ${targetPath}`);
+                        } catch {
+                            channel.appendLine(`⚠️ Note: ${headerFile} not found in workspace, assuming it's a library include`);
+                        }
+                    }
                 } catch (err) {
-                    // If the file doesn't exist locally, it's probably a library include
-                    channel.appendLine(`Note: ${headerFile} not found locally, assuming it's a library include`);
+                    channel.appendLine(`Error processing ${headerFile}: ${err}`);
                 }
             }
             

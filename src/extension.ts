@@ -15,6 +15,7 @@ const includeCache: { [file: string]: string } = {};
 const includeActiveCache: { [file: string]: string } = {};
 const boardCache: { [workspace: string]: string } = {};
 const debouncedRegenerate: { [file: string]: () => void } = {};
+let _doc: vscode.TextDocument | null = null;
 
 // Cache for compilation results
 interface CompilationCache {
@@ -37,6 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidSaveTextDocument(doc => {
         if (!doc.fileName.endsWith('.ino')) return;
         if (doc.fileName.endsWith('.cpp')) return;
+        _doc = doc;
 
         channel.appendLine(`Saved file, regenerating IntelliSense for ${doc.fileName}`);
         regenerateIntellisense(doc.fileName, channel);
@@ -45,6 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.workspace.onDidOpenTextDocument(doc => {
         if (!doc.fileName.endsWith('.ino')) return;
         if (doc.fileName.endsWith('.cpp')) return;
+        _doc = doc;
 
         const lines = doc.getText().split(/\r?\n/);
         includeCache[doc.fileName] = lines
@@ -66,6 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
         const doc = event.document;
         if (!doc.fileName.endsWith('.ino')) return;
         if (doc.fileName.endsWith('.cpp')) return;
+        _doc = doc;
 
         if (!debouncedRegenerate[doc.fileName]) {
             debouncedRegenerate[doc.fileName] = debounce(() => regenerateIntellisense(doc.fileName, channel), 1000);
@@ -239,7 +243,7 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
         let tempDir: string | undefined;
         
         if (activeIncludes) {
-            const sketchContent = await fs.readFile(sketchPath, 'utf8');
+            const sketchContent = _doc ? _doc.getText() : await fs.readFile(sketchPath, 'utf8');
             const sketchName = path.basename(sketchPath, '.ino');
             const originalSketchDir = path.dirname(sketchPath);
             

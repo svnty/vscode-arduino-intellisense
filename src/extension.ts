@@ -10,8 +10,7 @@ interface BoardProperties {
   compilerPath: string;
 }
 
-// Cache to prevent unnecessary regeneration
-const includeCache: { [file: string]: string } = {};
+// Cache to prevent unnecessary regeneratio
 const includeActiveCache: { [file: string]: string } = {};
 const boardCache: { [workspace: string]: string } = {};
 const debouncedRegenerate: { [file: string]: () => void } = {};

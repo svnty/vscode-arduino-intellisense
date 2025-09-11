@@ -96,7 +96,6 @@ export function activate(context: vscode.ExtensionContext) {
         if (newActiveIncludes !== oldActive) {
             includeActiveCache[doc.fileName] = newActiveIncludes;
             channel.appendLine(`Include changed in memory, regenerating IntelliSense for ${doc.fileName}`);
-            channel.appendLine(`Active includes: ${activeIncludeStatements.join(', ')}`);
             debouncedRegenerate[doc.fileName]();
         }
     });
@@ -218,7 +217,7 @@ async function regenerateIntellisense(sketchPath: string, channel: vscode.Output
                     compilerPath: props.compilerPath,
                     cStandard: 'c11',
                     cppStandard: 'c++17',
-                    intelliSenseMode: 'gcc-x64'
+                    intelliSenseMode: getIntelliSenseMode(props.compilerPath)
                 }
             ],
             version: 4
@@ -345,7 +344,9 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
                 channel.appendLine(`Warning: Failed to clean up directories: ${err}`);
             }
 
-            if (stderr) channel.appendLine(`arduino-cli error: ${stderr}`);
+            if (stderr) {
+                channel.appendLine(`arduino-cli error: ${stderr}`);
+            }
 
             const includePaths: string[] = [];
             const defines: string[] = [];
@@ -358,20 +359,25 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
             // - ESP8266: xtensa-lx106-elf-g++ (ESP8266 series) 
             // - RISC-V: riscv32-esp-elf-g++ (ESP32-C3, CH32V, etc.)
             const gppLines = stdout.split(/\r?\n/).filter(l => 
-                l.includes('avr-g++') || 
+                (l.includes('avr-g++') || 
                 l.includes('arm-none-eabi-g++') || 
                 l.includes('xtensa-esp32-elf-g++') || 
                 l.includes('xtensa-lx106-elf-g++') ||
-                l.includes('riscv32-esp-elf-g++')
+                l.includes('riscv32-esp-elf-g++')) &&
+                l.includes('-I') // Only lines with include paths (compilation, not linking)
             );
             if (gppLines.length > 0) {
                 const lastLine = gppLines[gppLines.length - 1];
+                channel.appendLine(`Using compiler line: ${lastLine}`);
                 const parts = lastLine.split(' ');
 
                 parts.forEach(p => {
                     if (p.startsWith('-I')) includePaths.push(p.substring(2));
                     if (p.startsWith('-D')) defines.push(p.substring(2));
                 });
+
+                channel.appendLine(`Extracted ${includePaths.length} include paths from compilation:`);
+                includePaths.forEach(path => channel.appendLine(`  - ${path}`));
 
                 const firstGpp = parts.find(p => p.includes('g++'));
                 if (firstGpp) {
@@ -494,33 +500,29 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
                         let includeHeaders = '';
                         
                         if (compilerPath.includes('arm-none-eabi-g++')) {
-                            // ARM-specific setup - use the include paths from compilation
-                            const compilationIncludes = includePaths.filter(p => !p.includes(path.dirname(compilerPath)));
-                            compilationIncludes.forEach(includePath => {
+                            // ARM-specific setup - use ALL include paths from compilation
+                            includePaths.forEach(includePath => {
                                 defineArgs.push(`-I${includePath}`);
                             });
                             // Use Arduino core headers for ARM
                             includeHeaders = '#include <Arduino.h>\n';
                         } else if (compilerPath.includes('xtensa-esp32-elf-g++')) {
                             // ESP32-specific setup
-                            const compilationIncludes = includePaths.filter(p => !p.includes(path.dirname(compilerPath)));
-                            compilationIncludes.forEach(includePath => {
+                            includePaths.forEach(includePath => {
                                 defineArgs.push(`-I${includePath}`);
                             });
                             // Use ESP32 core headers
                             includeHeaders = '#include <Arduino.h>\n#include <esp32-hal.h>\n';
                         } else if (compilerPath.includes('xtensa-lx106-elf-g++')) {
                             // ESP8266-specific setup
-                            const compilationIncludes = includePaths.filter(p => !p.includes(path.dirname(compilerPath)));
-                            compilationIncludes.forEach(includePath => {
+                            includePaths.forEach(includePath => {
                                 defineArgs.push(`-I${includePath}`);
                             });
                             // Use ESP8266 core headers
                             includeHeaders = '#include <Arduino.h>\n#include <ESP8266WiFi.h>\n';
                         } else if (compilerPath.includes('riscv32-esp-elf-g++')) {
                             // RISC-V (ESP32-C3, etc.) setup
-                            const compilationIncludes = includePaths.filter(p => !p.includes(path.dirname(compilerPath)));
-                            compilationIncludes.forEach(includePath => {
+                            includePaths.forEach(includePath => {
                                 defineArgs.push(`-I${includePath}`);
                             });
                             // Use RISC-V ESP core headers
@@ -528,8 +530,7 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
                         } else {
                             // AVR-specific setup
                             defineArgs.push(`-mmcu=${mmcu}`);
-                            const coreIncludePaths = includePaths.filter(p => p.includes(path.dirname(compilerPath)));
-                            coreIncludePaths.forEach(includePath => {
+                            includePaths.forEach(includePath => {
                                 defineArgs.push(`-I${includePath}`);
                             });
                             includeHeaders = '#include <avr/io.h>\n';
@@ -578,6 +579,20 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
             }
         });
     });
+}
+
+function getIntelliSenseMode(compilerPath: string): string {
+    if (compilerPath.includes('arm-none-eabi-g++')) {
+        return 'gcc-arm';
+    } else if (compilerPath.includes('xtensa-esp32-elf-g++')) {
+        return 'gcc-x64'; // ESP32 uses x64 mode
+    } else if (compilerPath.includes('xtensa-lx106-elf-g++')) {
+        return 'gcc-x64'; // ESP8266 uses x64 mode
+    } else if (compilerPath.includes('riscv32-esp-elf-g++')) {
+        return 'gcc-x64'; // RISC-V uses x64 mode
+    } else {
+        return 'gcc-x64'; // AVR and default
+    }
 }
 
 export function deactivate() { }

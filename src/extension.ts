@@ -39,9 +39,6 @@ export function activate(context: vscode.ExtensionContext) {
     if (!doc.fileName.endsWith('.ino')) {
       return;
     }
-    if (doc.fileName.endsWith('.cpp')) {
-      return;
-    }
     _docs[doc.fileName] = doc.getText();
 
     channel.appendLine(`Saved file, checking if #includes have changed`);
@@ -75,9 +72,6 @@ export function activate(context: vscode.ExtensionContext) {
     if (!doc.fileName.endsWith('.ino')) {
       return;
     }
-    if (doc.fileName.endsWith('.cpp')) {
-      return;
-    }
     _docs[doc.fileName] = doc.getText();
 
     const lines = doc.getText().split(/\r?\n/);
@@ -98,47 +92,40 @@ export function activate(context: vscode.ExtensionContext) {
   // Watch for changes in Arduino sketches
   vscode.workspace.onDidChangeTextDocument(event => {
     const doc = event.document;
-    if (!doc.fileName.endsWith('.ino')) return;
-    if (doc.fileName.endsWith('.cpp')) return;
+    if (!doc.fileName.endsWith('.ino')) {
+      return;
+    }
     _docs[doc.fileName] = doc.getText();
 
     if (!debouncedRegenerate[doc.fileName]) {
-      debouncedRegenerate[doc.fileName] = debounce(() => regenerateIntellisense(doc.fileName, channel), 1000);
+      debouncedRegenerate[doc.fileName] = debounce(() => {
+        checkIncludesAndRegenerate(doc.fileName, channel);
+      }, 2000); // Increased debounce time to 2 seconds
     }
 
-    // Always use the current document text to find active (uncommented) includes
-    const text = doc.getText();
-    const activeIncludeLines = text.split(/\r?\n/).filter(line => /^\s*#include/.test(line));
+    // Only check if changes might affect #include lines
+    const includeLineChanged = event.contentChanges.some(change => {
+      const startLine = change.range.start.line;
+      const endLine = change.range.end.line;
+      
+      // Check if any changed lines contain or might contain #include
+      for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
+        const line = doc.lineAt(lineNum).text;
+        if (line.includes('#include') || line.includes('include') || change.text.includes('#include')) {
+          return true;
+        }
+      }
+      return false;
+    });
 
-    if (!activeIncludeLines.length) {
-      // No active includes found, don't regenerate
-      return;
-    }
-
-    const activeIncludeStatements = activeIncludeLines.map(line => {
-      const match = line.match(/^\s*#include\s+[<"]([^>"]+)[>"]/);
-      return match ? match[1] : null;
-    }).filter((name): name is string => name !== null);
-
-    // Update active includes cache with the current state
-    const newActiveIncludes = activeIncludeStatements.join('\n');
-    const oldActive = includeActiveCache[doc.fileName] || '';
-
-    if (newActiveIncludes !== oldActive) {
-      includeActiveCache[doc.fileName] = newActiveIncludes;
-      channel.appendLine(`#include changed in memory, regenerating IntelliSense for ${doc.fileName}`);
+    if (includeLineChanged) {
+      // Only run the expensive check if #include lines might have changed
       debouncedRegenerate[doc.fileName]();
     }
   });
 
-  // Handle newly opened sketches
-  vscode.workspace.onDidOpenTextDocument(doc => {
-    if (!doc.fileName.endsWith('.ino')) return;
-    if (doc.fileName.endsWith('.cpp')) return;
-    includeCache[doc.fileName] = (doc.getText().match(/^#include.*$/gm) || []).join('\n');
-
-    regenerateIntellisense(doc.fileName, channel);
-  });
+  // Handle newly opened sketches (this is now handled by the first onDidOpenTextDocument handler above)
+  // Removed duplicate handler to avoid conflicts
 
   async function watchArduinoJson(folderPath: string) {
     const watcher = vscode.workspace.createFileSystemWatcher('**/arduino.json');
@@ -174,6 +161,40 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.workspace.textDocuments
       .filter(doc => doc.fileName.endsWith('.ino') && doc.fileName.startsWith(folderPath))
       .forEach(doc => regenerateIntellisense(doc.fileName, channel));
+  }
+}
+
+// Efficient function to check includes and regenerate only if needed
+function checkIncludesAndRegenerate(sketchPath: string, channel: vscode.OutputChannel) {
+  const text = _docs[sketchPath];
+  if (!text) {
+    return;
+  }
+
+  // Fast check: count lines that start with #include (with optional whitespace)
+  const includeRegex = /^\s*#include\s+[<"]([^>"]+)[>"]/;
+  const lines = text.split(/\r?\n/);
+  
+  const activeIncludeStatements: string[] = [];
+  
+  // Only process lines that contain 'include' to avoid regex on every line
+  for (const line of lines) {
+    if (line.includes('include')) {
+      const match = line.match(includeRegex);
+      if (match) {
+        activeIncludeStatements.push(match[1]);
+      }
+    }
+  }
+
+  // Update active includes cache with the current state
+  const newActiveIncludes = activeIncludeStatements.join('\n');
+  const oldActive = includeActiveCache[sketchPath] || '';
+
+  if (newActiveIncludes !== oldActive) {
+    includeActiveCache[sketchPath] = newActiveIncludes;
+    channel.appendLine(`#include changed, regenerating IntelliSense for ${sketchPath}`);
+    regenerateIntellisense(sketchPath, channel);
   }
 }
 

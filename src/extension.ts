@@ -39,33 +39,12 @@ export function activate(context: vscode.ExtensionContext) {
     if (!doc.fileName.endsWith('.ino')) {
       return;
     }
+
     _docs[doc.fileName] = doc.getText();
 
-    channel.appendLine(`Saved file, checking if #includes have changed`);
+    channel.appendLine(`Saved file ${doc.fileName}, checking if #includes have changed`);
 
-    const activeIncludeLines = _docs[doc.fileName].split(/\r?\n/).filter(line => /^\s*#include/.test(line));
-
-    if (!activeIncludeLines.length) {
-      // No active includes found, don't regenerate
-      return;
-    }
-
-    const activeIncludeStatements = activeIncludeLines.map(line => {
-      const match = line.match(/^\s*#include\s+[<"]([^>"]+)[>"]/);
-      return match ? match[1] : null;
-    }).filter((name): name is string => name !== null);
-
-    // Update active includes cache with the current state
-    const newActiveIncludes = activeIncludeStatements.join('\n');
-    const oldActive = includeActiveCache[doc.fileName] || '';
-
-    if (newActiveIncludes !== oldActive) {
-      includeActiveCache[doc.fileName] = newActiveIncludes;
-      channel.appendLine(`#include changed in memory, regenerating IntelliSense for ${doc.fileName}`);
-      regenerateIntellisense(doc.fileName, channel);
-    } else {
-      channel.appendLine(`No changes in #includes, skipping regeneration`);
-    }
+    checkIncludesAndRegenerate(doc.fileName, channel);
   });
 
   vscode.workspace.onDidOpenTextDocument(doc => {
@@ -74,19 +53,9 @@ export function activate(context: vscode.ExtensionContext) {
     }
     _docs[doc.fileName] = doc.getText();
 
-    const lines = doc.getText().split(/\r?\n/);
-    includeCache[doc.fileName] = lines
-      .filter(line => /^\s*(?:\/\/\s*)?#include/.test(line))
-      .map(l => l.trim())
-      .join('\n');
-
-    includeActiveCache[doc.fileName] = lines
-      .filter(line => /^\s*#include/.test(line))
-      .map(l => l.trim())
-      .join('\n');
-
-    channel.appendLine(`Opened file, regenerating IntelliSense for ${doc.fileName}`);
-    regenerateIntellisense(doc.fileName, channel);
+    channel.appendLine(`Opened file ${doc.fileName}, regenerating IntelliSense`);
+    
+    checkIncludesAndRegenerate(doc.fileName, channel);
   });
 
   // Watch for changes in Arduino sketches

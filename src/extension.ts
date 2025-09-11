@@ -163,6 +163,8 @@ function checkIncludesAndRegenerate(sketchPath: string, channel: vscode.OutputCh
     includeActiveCache[sketchPath] = newActiveIncludes;
     channel.appendLine(`#include changed, regenerating IntelliSense for ${sketchPath}`);
     regenerateIntellisense(sketchPath, channel);
+  } else {
+    channel.appendLine(`No change in #includes for ${sketchPath}, skipping regeneration`);
   }
 }
 

@@ -351,62 +351,19 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
             const defines: string[] = [];
             let compilerPath = '';
 
-            // Get all Arduino library paths
-            const libPathsProc = spawn('arduino-cli', ['config', 'dump']);
-            let libPathsOutput = '';
-            libPathsProc.stdout.on('data', data => libPathsOutput += data.toString());
-            
-            await new Promise<void>((resolve) => {
-                libPathsProc.on('close', async () => {
-                    try {
-                        // Parse the YAML-like output to find library paths
-                        const lines = libPathsOutput.split('\n');
-                        for (const line of lines) {
-                            if (line.includes('user:') || line.includes('sketchbook:')) {
-                                const match = line.match(/:\s*"([^"]+)"/);
-                                if (match) {
-                                    const libPath = path.join(match[1], 'libraries');
-                                    try {
-                                        await fs.access(libPath);
-                                        // Add library path and all its subdirectories
-                                        const entries = await fs.readdir(libPath, { withFileTypes: true });
-                                        for (const entry of entries) {
-                                            if (entry.isDirectory()) {
-                                                const libraryPath = path.join(libPath, entry.name);
-                                                includePaths.push(
-                                                    libraryPath,
-                                                    path.join(libraryPath, 'src')
-                                                );
-                                            }
-                                        }
-                                    } catch (err) {
-                                        channel.appendLine(`Note: Library path ${libPath} not found`);
-                                    }
-                                }
-                            }
-                        }
-                    } catch (err) {
-                        channel.appendLine(`Warning: Error processing library paths: ${err}`);
-                    }
-                    resolve();
-                });
-            });
-
-            // Also add Arduino core library paths
-            const arduinoLibPath = path.join(path.dirname(compilerPath), '..', 'libraries');
-            try {
-                await fs.access(arduinoLibPath);
-                const entries = await fs.readdir(arduinoLibPath, { withFileTypes: true });
-                for (const entry of entries) {
-                    if (entry.isDirectory()) {
-                        includePaths.push(path.join(arduinoLibPath, entry.name));
-                    }
-                }
-            } catch (err) {
-                channel.appendLine(`Note: Arduino core library path not found: ${arduinoLibPath}`);
-            }
-
-            const gppLines = stdout.split(/\r?\n/).filter(l => l.includes('avr-g++') || l.includes('arm-none-eabi-g++'));
+            // Look for compiler lines from supported architectures:
+            // - AVR: avr-g++ (Uno, Mega, etc.)
+            // - ARM Cortex-M: arm-none-eabi-g++ (Uno R4, Zero, MKR, RP2040, etc.)
+            // - ESP32: xtensa-esp32-elf-g++ (ESP32 series)
+            // - ESP8266: xtensa-lx106-elf-g++ (ESP8266 series) 
+            // - RISC-V: riscv32-esp-elf-g++ (ESP32-C3, CH32V, etc.)
+            const gppLines = stdout.split(/\r?\n/).filter(l => 
+                l.includes('avr-g++') || 
+                l.includes('arm-none-eabi-g++') || 
+                l.includes('xtensa-esp32-elf-g++') || 
+                l.includes('xtensa-lx106-elf-g++') ||
+                l.includes('riscv32-esp-elf-g++')
+            );
             if (gppLines.length > 0) {
                 const lastLine = gppLines[gppLines.length - 1];
                 const parts = lastLine.split(' ');
@@ -420,16 +377,87 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
                 if (firstGpp) {
                     compilerPath = firstGpp;
 
-                    // Get the include directories from the compiler
-                    const includeDir = path.join(path.dirname(compilerPath), '../avr/include');
-                    const gccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/avr/7.3.0/include');
-                    const mmcu = parts.find(p => p.startsWith('-mmcu='))?.split('=')[1] || 'atmega2560';
+                    // Detect compiler architecture and set paths accordingly
+                    if (compilerPath.includes('arm-none-eabi-g++')) {
+                        // ARM Cortex-M compiler paths (Uno R4, Zero, MKR series, RP2040, etc.)
+                        const armIncludeDir = path.join(path.dirname(compilerPath), '../arm-none-eabi/include');
+                        const armGccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/arm-none-eabi');
+                        
+                        includePaths.push(armIncludeDir);
+                        
+                        // Find the actual GCC version directory for ARM
+                        try {
+                            const gccVersionDirs = await fs.readdir(armGccIncludeDir);
+                            if (gccVersionDirs.length > 0) {
+                                const armGccVersionDir = path.join(armGccIncludeDir, gccVersionDirs[0], 'include');
+                                includePaths.push(armGccVersionDir);
+                            }
+                        } catch (err) {
+                            channel.appendLine(`Warning: Could not find ARM GCC include directory: ${err}`);
+                        }
+                    } else if (compilerPath.includes('xtensa-esp32-elf-g++')) {
+                        // ESP32 compiler paths
+                        const esp32IncludeDir = path.join(path.dirname(compilerPath), '../xtensa-esp32-elf/include');
+                        const esp32GccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/xtensa-esp32-elf');
+                        
+                        includePaths.push(esp32IncludeDir);
+                        
+                        // Find GCC version directory for ESP32
+                        try {
+                            const gccVersionDirs = await fs.readdir(esp32GccIncludeDir);
+                            if (gccVersionDirs.length > 0) {
+                                const esp32GccVersionDir = path.join(esp32GccIncludeDir, gccVersionDirs[0], 'include');
+                                includePaths.push(esp32GccVersionDir);
+                            }
+                        } catch (err) {
+                            channel.appendLine(`Warning: Could not find ESP32 GCC include directory: ${err}`);
+                        }
+                    } else if (compilerPath.includes('xtensa-lx106-elf-g++')) {
+                        // ESP8266 compiler paths
+                        const esp8266IncludeDir = path.join(path.dirname(compilerPath), '../xtensa-lx106-elf/include');
+                        const esp8266GccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/xtensa-lx106-elf');
+                        
+                        includePaths.push(esp8266IncludeDir);
+                        
+                        // Find GCC version directory for ESP8266
+                        try {
+                            const gccVersionDirs = await fs.readdir(esp8266GccIncludeDir);
+                            if (gccVersionDirs.length > 0) {
+                                const esp8266GccVersionDir = path.join(esp8266GccIncludeDir, gccVersionDirs[0], 'include');
+                                includePaths.push(esp8266GccVersionDir);
+                            }
+                        } catch (err) {
+                            channel.appendLine(`Warning: Could not find ESP8266 GCC include directory: ${err}`);
+                        }
+                    } else if (compilerPath.includes('riscv32-esp-elf-g++')) {
+                        // RISC-V compiler paths (ESP32-C3, etc.)
+                        const riscvIncludeDir = path.join(path.dirname(compilerPath), '../riscv32-esp-elf/include');
+                        const riscvGccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/riscv32-esp-elf');
+                        
+                        includePaths.push(riscvIncludeDir);
+                        
+                        // Find GCC version directory for RISC-V
+                        try {
+                            const gccVersionDirs = await fs.readdir(riscvGccIncludeDir);
+                            if (gccVersionDirs.length > 0) {
+                                const riscvGccVersionDir = path.join(riscvGccIncludeDir, gccVersionDirs[0], 'include');
+                                includePaths.push(riscvGccVersionDir);
+                            }
+                        } catch (err) {
+                            channel.appendLine(`Warning: Could not find RISC-V GCC include directory: ${err}`);
+                        }
+                    } else {
+                        // AVR compiler paths (traditional Arduino boards)
+                        const includeDir = path.join(path.dirname(compilerPath), '../avr/include');
+                        const gccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/avr/7.3.0/include');
+                        
+                        includePaths.push(
+                            includeDir,
+                            gccIncludeDir
+                        );
+                    }
 
-                    // Add the standard compiler include paths
-                    includePaths.push(
-                        includeDir,
-                        gccIncludeDir
-                    );
+                    const mmcu = parts.find(p => p.startsWith('-mmcu='))?.split('=')[1] || 'atmega2560';
 
                     // First, get standard library defines to filter them out later
                     const stdLibProc = spawn(compilerPath, [
@@ -462,18 +490,57 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
                         channel.appendLine(`Found ${stdLibDefines.size} standard library defines to exclude`);
 
                         // Now get Arduino and hardware-specific defines
-                        const defineProc = spawn(compilerPath, [
-                            '-dM',
-                            '-E',
-                            '-x', 'c++',
-                            `-mmcu=${mmcu}`,
-                            `-I${includeDir}`,
-                            `-I${gccIncludeDir}`,
-                            '-'
-                        ]);
+                        let defineArgs: string[] = ['-dM', '-E', '-x', 'c++'];
+                        let includeHeaders = '';
+                        
+                        if (compilerPath.includes('arm-none-eabi-g++')) {
+                            // ARM-specific setup - use the include paths from compilation
+                            const compilationIncludes = includePaths.filter(p => !p.includes(path.dirname(compilerPath)));
+                            compilationIncludes.forEach(includePath => {
+                                defineArgs.push(`-I${includePath}`);
+                            });
+                            // Use Arduino core headers for ARM
+                            includeHeaders = '#include <Arduino.h>\n';
+                        } else if (compilerPath.includes('xtensa-esp32-elf-g++')) {
+                            // ESP32-specific setup
+                            const compilationIncludes = includePaths.filter(p => !p.includes(path.dirname(compilerPath)));
+                            compilationIncludes.forEach(includePath => {
+                                defineArgs.push(`-I${includePath}`);
+                            });
+                            // Use ESP32 core headers
+                            includeHeaders = '#include <Arduino.h>\n#include <esp32-hal.h>\n';
+                        } else if (compilerPath.includes('xtensa-lx106-elf-g++')) {
+                            // ESP8266-specific setup
+                            const compilationIncludes = includePaths.filter(p => !p.includes(path.dirname(compilerPath)));
+                            compilationIncludes.forEach(includePath => {
+                                defineArgs.push(`-I${includePath}`);
+                            });
+                            // Use ESP8266 core headers
+                            includeHeaders = '#include <Arduino.h>\n#include <ESP8266WiFi.h>\n';
+                        } else if (compilerPath.includes('riscv32-esp-elf-g++')) {
+                            // RISC-V (ESP32-C3, etc.) setup
+                            const compilationIncludes = includePaths.filter(p => !p.includes(path.dirname(compilerPath)));
+                            compilationIncludes.forEach(includePath => {
+                                defineArgs.push(`-I${includePath}`);
+                            });
+                            // Use RISC-V ESP core headers
+                            includeHeaders = '#include <Arduino.h>\n#include <esp32-hal.h>\n';
+                        } else {
+                            // AVR-specific setup
+                            defineArgs.push(`-mmcu=${mmcu}`);
+                            const coreIncludePaths = includePaths.filter(p => p.includes(path.dirname(compilerPath)));
+                            coreIncludePaths.forEach(includePath => {
+                                defineArgs.push(`-I${includePath}`);
+                            });
+                            includeHeaders = '#include <avr/io.h>\n';
+                        }
+                        
+                        defineArgs.push('-');
+                        
+                        const defineProc = spawn(compilerPath, defineArgs);
 
-                        // Include only AVR/Arduino headers, not standard C/C++ headers
-                        defineProc.stdin.write('#include <avr/io.h>\n');
+                        // Include appropriate headers based on compiler type
+                        defineProc.stdin.write(includeHeaders);
                         defineProc.stdin.end();
 
                         let defineOutput = '';

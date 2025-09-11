@@ -15,7 +15,7 @@ const includeCache: { [file: string]: string } = {};
 const includeActiveCache: { [file: string]: string } = {};
 const boardCache: { [workspace: string]: string } = {};
 const debouncedRegenerate: { [file: string]: () => void } = {};
-let _doc: vscode.TextDocument | null = null;
+const _docs: { [file: string]: string } = {};
 
 // Cache for compilation results
 interface CompilationCache {
@@ -36,14 +36,17 @@ export function activate(context: vscode.ExtensionContext) {
   workspaceFolders.forEach(folder => watchArduinoJson(folder.uri.fsPath));
 
   vscode.workspace.onDidSaveTextDocument(doc => {
-    if (!doc.fileName.endsWith('.ino')) return;
-    if (doc.fileName.endsWith('.cpp')) return;
-    _doc = doc;
+    if (!doc.fileName.endsWith('.ino')) {
+      return;
+    }
+    if (doc.fileName.endsWith('.cpp')) {
+      return;
+    }
+    _docs[doc.fileName] = doc.getText();
 
     channel.appendLine(`Saved file, checking if #includes have changed`);
 
-    const text = doc.getText();
-    const activeIncludeLines = text.split(/\r?\n/).filter(line => /^\s*#include/.test(line));
+    const activeIncludeLines = _docs[doc.fileName].split(/\r?\n/).filter(line => /^\s*#include/.test(line));
 
     if (!activeIncludeLines.length) {
       // No active includes found, don't regenerate
@@ -69,9 +72,13 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   vscode.workspace.onDidOpenTextDocument(doc => {
-    if (!doc.fileName.endsWith('.ino')) return;
-    if (doc.fileName.endsWith('.cpp')) return;
-    _doc = doc;
+    if (!doc.fileName.endsWith('.ino')) {
+      return;
+    }
+    if (doc.fileName.endsWith('.cpp')) {
+      return;
+    }
+    _docs[doc.fileName] = doc.getText();
 
     const lines = doc.getText().split(/\r?\n/);
     includeCache[doc.fileName] = lines
@@ -93,7 +100,7 @@ export function activate(context: vscode.ExtensionContext) {
     const doc = event.document;
     if (!doc.fileName.endsWith('.ino')) return;
     if (doc.fileName.endsWith('.cpp')) return;
-    _doc = doc;
+    _docs[doc.fileName] = doc.getText();
 
     if (!debouncedRegenerate[doc.fileName]) {
       debouncedRegenerate[doc.fileName] = debounce(() => regenerateIntellisense(doc.fileName, channel), 1000);
@@ -129,6 +136,7 @@ export function activate(context: vscode.ExtensionContext) {
     if (!doc.fileName.endsWith('.ino')) return;
     if (doc.fileName.endsWith('.cpp')) return;
     includeCache[doc.fileName] = (doc.getText().match(/^#include.*$/gm) || []).join('\n');
+
     regenerateIntellisense(doc.fileName, channel);
   });
 
@@ -266,7 +274,7 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
     let tempDir: string | undefined;
 
     if (activeIncludes) {
-      const sketchContent = _doc ? _doc.getText() : await fs.readFile(sketchPath, 'utf8');
+      const sketchContent = _docs[sketchPath] ? _docs[sketchPath] : await fs.readFile(sketchPath, 'utf8');
       const sketchName = path.basename(sketchPath, '.ino');
       const originalSketchDir = path.dirname(sketchPath);
 
@@ -316,7 +324,7 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
 
             // Copy the header file
             await fs.copyFile(sourcePath, targetPath);
-            channel.appendLine(`✅ Copied local header to: ${targetPath}`);
+            channel.appendLine(`Copied local header to: ${targetPath}`);
           } else {
             // Try direct path as fallback
             const directPath = path.join(originalSketchDir, headerFile);

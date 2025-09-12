@@ -624,7 +624,8 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
                 })
                 .filter((d): d is string => d !== null)
                 // Filter out standard library defines
-                .filter(define => !stdLibDefines.has(define));
+                .filter(define => !stdLibDefines.has(define))
+                .filter(isArduinoRelevantDefine);;
 
               // Add hardware defines and command line defines
               defines.push(...hardwareDefines);
@@ -645,6 +646,32 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
       }
     });
   });
+}
+
+function isArduinoRelevantDefine(define: string): boolean {
+  const excludePatterns = [
+    /^ARDUINO_API_H(=|$)/,
+    /^ARDUINO_H(=|$)/,
+    /^ARDUINO_VARIANT_H(=|$)/,
+    /^BSP_API_H(=|$)/,
+    /^BSP_CFG_H_(=|$)/,
+    /^BOARD_CFG_H_(=|$)/,
+    /^__/, /^_/, /^STD/, /^__GNUC/, /^__cplusplus/, /^__STDC__/, /^__attribute__/
+  ];
+  if (excludePatterns.some(re => re.test(define))) {
+    return false;
+  }
+
+  const keepPrefixes = [
+    'ARDUINO', 'SERIAL', 'UBRR', 'USART', 'SPI', 'TWI', 'I2C', 'USB',
+    '__AVR_', 'F_CPU', 'BOARD_', 'CORE_', 'HAVE_', 'PIN_', 'PORT_', 'LED_BUILTIN',
+    'UBRR'
+  ];
+  if (keepPrefixes.some(prefix => define.startsWith(prefix))) {
+    return true;
+  }
+
+  return false;
 }
 
 function getIntelliSenseMode(compilerPath: string): string {

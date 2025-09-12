@@ -2,7 +2,7 @@
   "name": "vscode-arduino-intellisense",
   "displayName": "Arduino Community Edition Intellisense",
   "description": "Automatically regenerates IntelliSense when #include changes in .ino files",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "publisher": "svnty",
   "icon": "images/icon_128.png",
   "repository": {
@@ -40,6 +40,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "cocopa": "^0.0.14",
     "lodash.debounce": "^4.0.8"
   }
 }

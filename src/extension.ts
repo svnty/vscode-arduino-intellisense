@@ -333,7 +333,7 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
 
               // Copy the header file
               await fs.copyFile(directPath, targetPath);
-              channel.appendLine(`✅ Copied local header (direct path) to: ${targetPath}`);
+              channel.appendLine(`Copied local header (direct path) to: ${targetPath}`);
             } catch {
               channel.appendLine(`⚠️ Note: ${headerFile} not found in workspace, assuming it's a library include`);
             }

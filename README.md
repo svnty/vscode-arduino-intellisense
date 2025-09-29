@@ -54,3 +54,9 @@ Hit `Cmd + Shift + P` and type `>Arduino: Library Manager`.
 Install boards
 
 Hit `Cmd + Shift + P` and type `>Arduino: Board Manager`
+
+# Error?
+
+Try including Arduino.h in your .ino file
+
+`#include <Arduino.h>`

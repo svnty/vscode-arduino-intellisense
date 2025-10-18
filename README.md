@@ -13,7 +13,10 @@ Fix intellisense for Arduino Community Edition
 - ESP8266: xtensa-lx106-elf-g++ (ESP8266 series) 
 - RISC-V: riscv32-esp-elf-g++ (ESP32-C3, CH32V, etc.)
 
-## Recommended install
+## Installation
+
+### Mac OS (Apple silicon)
+
 Install arduino-cli
 
 ```bash
@@ -47,6 +50,28 @@ Open VS-CODE user preferences (settings.json)
 }
 ```
 
+### Windows installation (With powershell)
+
+Download `https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.zip`
+
+Drag the file to `C:\Program Files\Arduino CLI\`
+
+Open VS-CODE user preferences (settings.json)
+
+```json
+{
+  "arduino.useArduinoCli": true,
+  "arduino.analyzeOnOpen": false,
+  "arduino.analyzeOnSettingChange": false,
+  "arduino.path": "C:\\Program Files\\Arduino CLI",
+  "arduino.commandPath": "arduino-cli.exe"
+}
+```
+
+Open powershell as an administrator and run `[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\Arduino CLI", "Machine")`
+
+## Arduino libraries
+
 Install libraries
 
 Hit `Cmd + Shift + P` and type `>Arduino: Library Manager`.
@@ -55,7 +80,7 @@ Install boards
 
 Hit `Cmd + Shift + P` and type `>Arduino: Board Manager`
 
-# Error?
+## Error?
 
 Try including Arduino.h in your .ino file
 

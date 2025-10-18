@@ -452,81 +452,85 @@ async function getBoardProperties(FQBN: string, sketchPath: string, channel: vsc
           // Detect compiler architecture and set paths accordingly
           if (compilerPath.includes('arm-none-eabi-g++')) {
             // ARM Cortex-M compiler paths (Uno R4, Zero, MKR series, RP2040, etc.)
-            const armIncludeDir = path.join(path.dirname(compilerPath), '../arm-none-eabi/include');
-            const armGccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/arm-none-eabi');
-
+            const armIncludeDir = path.join(path.dirname(compilerPath), '..', 'arm-none-eabi', 'include');
             includePaths.push(armIncludeDir);
 
-            // Find the actual GCC version directory for ARM
-            try {
-              const gccVersionDirs = await fs.readdir(armGccIncludeDir);
-              if (gccVersionDirs.length > 0) {
-                const armGccVersionDir = path.join(armGccIncludeDir, gccVersionDirs[0], 'include');
-                includePaths.push(armGccVersionDir);
+            // Prefer user overrides if provided
+            const armOverrides = getCompilerOverridesFor(compilerPath, 'arm-none-eabi');
+            if (armOverrides.length > 0) {
+              includePaths.push(...armOverrides);
+            } else {
+              try {
+                const add = await resolveGccIncludeDirs(path.dirname(compilerPath), 'arm-none-eabi');
+                if (add.length > 0) { includePaths.push(...add); }
+              } catch (err) {
+                channel.appendLine(`Warning: Could not find ARM GCC include directory: ${err}`);
               }
-            } catch (err) {
-              channel.appendLine(`Warning: Could not find ARM GCC include directory: ${err}`);
             }
           } else if (compilerPath.includes('xtensa-esp32-elf-g++')) {
             // ESP32 compiler paths
-            const esp32IncludeDir = path.join(path.dirname(compilerPath), '../xtensa-esp32-elf/include');
-            const esp32GccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/xtensa-esp32-elf');
-
+            const esp32IncludeDir = path.join(path.dirname(compilerPath), '..', 'xtensa-esp32-elf', 'include');
             includePaths.push(esp32IncludeDir);
 
-            // Find GCC version directory for ESP32
-            try {
-              const gccVersionDirs = await fs.readdir(esp32GccIncludeDir);
-              if (gccVersionDirs.length > 0) {
-                const esp32GccVersionDir = path.join(esp32GccIncludeDir, gccVersionDirs[0], 'include');
-                includePaths.push(esp32GccVersionDir);
+            const esp32Overrides = getCompilerOverridesFor(compilerPath, 'xtensa-esp32-elf');
+            if (esp32Overrides.length > 0) {
+              includePaths.push(...esp32Overrides);
+            } else {
+              try {
+                const add = await resolveGccIncludeDirs(path.dirname(compilerPath), 'xtensa-esp32-elf');
+                if (add.length > 0) { includePaths.push(...add); }
+              } catch (err) {
+                channel.appendLine(`Warning: Could not find ESP32 GCC include directory: ${err}`);
               }
-            } catch (err) {
-              channel.appendLine(`Warning: Could not find ESP32 GCC include directory: ${err}`);
             }
           } else if (compilerPath.includes('xtensa-lx106-elf-g++')) {
             // ESP8266 compiler paths
-            const esp8266IncludeDir = path.join(path.dirname(compilerPath), '../xtensa-lx106-elf/include');
-            const esp8266GccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/xtensa-lx106-elf');
-
+            const esp8266IncludeDir = path.join(path.dirname(compilerPath), '..', 'xtensa-lx106-elf', 'include');
             includePaths.push(esp8266IncludeDir);
 
-            // Find GCC version directory for ESP8266
-            try {
-              const gccVersionDirs = await fs.readdir(esp8266GccIncludeDir);
-              if (gccVersionDirs.length > 0) {
-                const esp8266GccVersionDir = path.join(esp8266GccIncludeDir, gccVersionDirs[0], 'include');
-                includePaths.push(esp8266GccVersionDir);
+            const esp8266Overrides = getCompilerOverridesFor(compilerPath, 'xtensa-lx106-elf');
+            if (esp8266Overrides.length > 0) {
+              includePaths.push(...esp8266Overrides);
+            } else {
+              try {
+                const add = await resolveGccIncludeDirs(path.dirname(compilerPath), 'xtensa-lx106-elf');
+                if (add.length > 0) { includePaths.push(...add); }
+              } catch (err) {
+                channel.appendLine(`Warning: Could not find ESP8266 GCC include directory: ${err}`);
               }
-            } catch (err) {
-              channel.appendLine(`Warning: Could not find ESP8266 GCC include directory: ${err}`);
             }
           } else if (compilerPath.includes('riscv32-esp-elf-g++')) {
             // RISC-V compiler paths (ESP32-C3, etc.)
-            const riscvIncludeDir = path.join(path.dirname(compilerPath), '../riscv32-esp-elf/include');
-            const riscvGccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/riscv32-esp-elf');
-
+            const riscvIncludeDir = path.join(path.dirname(compilerPath), '..', 'riscv32-esp-elf', 'include');
             includePaths.push(riscvIncludeDir);
 
-            // Find GCC version directory for RISC-V
-            try {
-              const gccVersionDirs = await fs.readdir(riscvGccIncludeDir);
-              if (gccVersionDirs.length > 0) {
-                const riscvGccVersionDir = path.join(riscvGccIncludeDir, gccVersionDirs[0], 'include');
-                includePaths.push(riscvGccVersionDir);
+            const riscvOverrides = getCompilerOverridesFor(compilerPath, 'riscv32-esp-elf');
+            if (riscvOverrides.length > 0) {
+              includePaths.push(...riscvOverrides);
+            } else {
+              try {
+                const add = await resolveGccIncludeDirs(path.dirname(compilerPath), 'riscv32-esp-elf');
+                if (add.length > 0) { includePaths.push(...add); }
+              } catch (err) {
+                channel.appendLine(`Warning: Could not find RISC-V GCC include directory: ${err}`);
               }
-            } catch (err) {
-              channel.appendLine(`Warning: Could not find RISC-V GCC include directory: ${err}`);
             }
           } else {
             // AVR compiler paths (traditional Arduino boards)
-            const includeDir = path.join(path.dirname(compilerPath), '../avr/include');
-            const gccIncludeDir = path.join(path.dirname(compilerPath), '../lib/gcc/avr/7.3.0/include');
+            const includeDir = path.join(path.dirname(compilerPath), '..', 'avr', 'include');
+            includePaths.push(includeDir);
 
-            includePaths.push(
-              includeDir,
-              gccIncludeDir
-            );
+            const avrOverrides = getCompilerOverridesFor(compilerPath, 'avr');
+            if (avrOverrides.length > 0) {
+              includePaths.push(...avrOverrides);
+            } else {
+              try {
+                const add = await resolveGccIncludeDirs(path.dirname(compilerPath), 'avr');
+                if (add.length > 0) { includePaths.push(...add); }
+              } catch (err) {
+                channel.appendLine(`Warning: Could not find AVR GCC include directory: ${err}`);
+              }
+            }
           }
 
           const mmcu = parts.find(p => p.startsWith('-mmcu='))?.split('=')[1] || 'atmega2560';
@@ -672,6 +676,68 @@ function isArduinoRelevantDefine(define: string): boolean {
   }
 
   return false;
+}
+
+// Helper: try to locate GCC include directories robustly across platforms
+async function resolveGccIncludeDirs(compilerDir: string, gccFolderName: string): Promise<string[]> {
+  const results: string[] = [];
+
+  // Base candidate: .../lib/gcc/<gccFolderName>
+  const gccBase = path.join(compilerDir, '..', 'lib', 'gcc', gccFolderName);
+
+  // 1) Direct include folder: .../lib/gcc/<gccFolderName>/include
+  try {
+    const directInclude = path.join(gccBase, 'include');
+    await fs.access(directInclude);
+    results.push(directInclude);
+    return results;
+  } catch {
+    // continue
+  }
+
+  // 2) Versioned subdirectories: .../lib/gcc/<gccFolderName>/<version>/include
+  try {
+    const entries = await fs.readdir(gccBase, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        const candidate = path.join(gccBase, e.name, 'include');
+        try {
+          await fs.access(candidate);
+          results.push(candidate);
+          break; // prefer first valid version
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch {
+    // gccBase doesn't exist or isn't readable
+  }
+
+  return results;
+}
+
+// Helper: read workspace/user settings to allow users to override compiler include dirs
+function getCompilerOverridesFor(compilerPath: string, key: string): string[] {
+  try {
+    const cfg = vscode.workspace.getConfiguration('arduinoIntelliSense');
+    const map = cfg.get<Record<string, string[]>>('compilerOverrides', {});
+    if (!map) { return []; }
+
+    const result: string[] = [];
+    for (const k of Object.keys(map)) {
+      const paths = map[k];
+      if (!Array.isArray(paths)) { continue; }
+      // Match by explicit key or if key appears in the compilerPath (substring)
+      if (k === key || (compilerPath && compilerPath.includes(k))) {
+        result.push(...paths);
+      }
+    }
+
+    return result;
+  } catch {
+    return [];
+  }
 }
 
 function getIntelliSenseMode(compilerPath: string): string {

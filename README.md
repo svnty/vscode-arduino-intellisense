@@ -50,11 +50,17 @@ Open VS-CODE user preferences (settings.json)
 }
 ```
 
+Run 
+
+```bash
+arduino-cli core install
+```
+
 ### Windows installation (With powershell)
 
-Download `https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.zip`
+Download [https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.zip](https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.zip)
 
-Drag the file to `C:\Program Files\Arduino CLI\`
+Create a new folder then drag the file to `C:\Program Files\Arduino CLI\`
 
 Open VS-CODE user preferences (settings.json)
 
@@ -68,15 +74,25 @@ Open VS-CODE user preferences (settings.json)
 }
 ```
 
-Open powershell as an administrator and run `[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\Arduino CLI", "Machine")`
+Open powershell as an administrator and run 
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files\Arduino CLI", "Machine")
+```
+
+Run
+
+```bash
+arduino-cli core install
+```
 
 ## Arduino libraries
 
-Install libraries
+### Install libraries
 
 Hit `Cmd + Shift + P` and type `>Arduino: Library Manager`.
 
-Install boards
+### Install boards
 
 Hit `Cmd + Shift + P` and type `>Arduino: Board Manager`
 
@@ -85,3 +101,34 @@ Hit `Cmd + Shift + P` and type `>Arduino: Board Manager`
 Try including Arduino.h in your .ino file
 
 `#include <Arduino.h>`
+
+## Custom settings
+
+If the extension isn't working, try adding a custom path to your boards compiler in vscode user settings.json
+
+### Windows specific example
+
+```json
+"arduinoIntelliSense.compilerOverrides": {
+  "arm-none-eabi": [
+    "C:\\Users\\X\\AppData\\Local\\Arduino15\\Packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include",
+    "C:\\Users\\X\\AppData\\Local\\Arduino15\\Packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include"
+  ],
+  "avr": [
+    "C:\\Users\\X\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\avr-gcc\\9.2.0-arduino3\\avr\\include"
+  ]
+}
+```
+
+### Mac specific example
+
+```json
+"arduinoIntelliSense.compilerOverrides": {
+  "arm-none-eabi": [
+    "~/Library/Arduino15/packages/arduino/tools/arm-none-eabi-gcc/7-2017q4/lib/gcc/arm-none-eabi/7.2.1/include"
+  ],
+  "avr": [
+    "~/Library/Arduino15/packages/arduino/tools/avr-gcc/9.2.0-arduino3/avr/include"
+  ]
+}
+```
